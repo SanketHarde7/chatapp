@@ -6,13 +6,23 @@ export type User = {
     created_at: Date;
 };
 
-export async function createUser(username:string) :Promise<User>{
-    const result=await pool.query<User>(
-        "INSERT INTO users (username) VALUES ($1) RETURNING id,username,created_at",
-        [username]
+export async function createUser(username: string, passwordHash: string | null = null): Promise<User> {
+    const result = await pool.query<User>(
+      "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username, created_at",
+      [username, passwordHash]
     );
     return result.rows[0];
-}
+  }
+  
+  export async function getAuthUser(
+    username: string
+  ): Promise<{ id: string; username: string; password_hash: string | null } | null> {
+    const result = await pool.query<{ id: string; username: string; password_hash: string | null }>(
+      "SELECT id, username, password_hash FROM users WHERE username = $1",
+      [username]
+    );
+    return result.rows[0] ?? null;
+  }
 export async function getUserById(id : string):Promise <User | null>
 {
     const result = await pool.query<User>

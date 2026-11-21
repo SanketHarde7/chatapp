@@ -445,22 +445,22 @@
   <div id="start-screen" class="screen active">
     <div class="auth-card">
       <h2>Welcome to Chat</h2>
-      <p>Dev login / user selection</p>
-      
+      <p>Login or create an account</p>
+
       <div class="form-group">
-        <label for="username-input">Create New User</label>
-        <input type="text" id="username-input" class="form-control" placeholder="Enter username..." />
+        <label for="username-input">Username</label>
+        <input type="text" id="username-input" class="form-control" placeholder="Enter username..." autocomplete="username" />
       </div>
-      <button class="btn" id="btn-create-user">Create user</button>
+      <div class="form-group">
+        <label for="password-input">Password</label>
+        <input type="password" id="password-input" class="form-control" placeholder="At least 8 characters" autocomplete="current-password" />
+      </div>
+      <button class="btn" id="btn-login">Login</button>
 
       <div class="divider">
-        <span>OR CONTINUE AS</span>
+        <span>NEW HERE?</span>
       </div>
-
-      <div class="user-list" id="existing-users-list">
-        <!-- Dynamically populated from GET /users -->
-        <div style="color: var(--text-muted); font-size: 13px; text-align: center;">Loading users...</div>
-      </div>
+      <button class="btn" id="btn-register">Register</button>
     </div>
   </div>
 
@@ -473,7 +473,7 @@
           <span class="me-name" id="my-username">User</span>
           <span class="me-id" id="my-id">ID</span>
         </div>
-        <button class="btn-logout" id="btn-logout">Switch</button>
+        <button class="btn-logout" id="btn-logout">Logout</button>
       </div>
 
       <div class="contacts-title">Contacts</div>
@@ -510,6 +510,7 @@
 
     // --- State Management ---
     let currentUser = null;          // { id, username }
+    let token = null;                // JWT, server se login/register par milta hai
     let activeContact = null;        // { id, username }
     let currentConversationId = null;// UUID or null
     let historyNextCursor = null;    // ULID cursor for older pagination
@@ -525,8 +526,9 @@
     const startScreen = document.getElementById("start-screen");
     const chatScreen = document.getElementById("chat-screen");
     const usernameInput = document.getElementById("username-input");
-    const btnCreateUser = document.getElementById("btn-create-user");
-    const existingUsersList = document.getElementById("existing-users-list");
+    const passwordInput = document.getElementById("password-input");
+    const btnLogin = document.getElementById("btn-login");
+    const btnRegister = document.getElementById("btn-register");
     const contactsList = document.getElementById("contacts-list");
     const chatTitle = document.getElementById("chat-title");
     const myUsernameEl = document.getElementById("my-username");
@@ -571,80 +573,72 @@
     }
 
     // =========================================================
-    // 3. User Authentication & Selection (Dev Mode)
+    // 3. Authentication (JWT)
     // =========================================================
-    async function loadExistingUsers() {
-      try {
-        const res = await fetch("/users");
-        if (!res.ok) throw new Error("Failed to load users");
-        const users = await res.json();
-        
-        existingUsersList.innerHTML = "";
-        if (users.length === 0) {
-          existingUsersList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">No users found. Create one!</div>';
-          return;
-        }
+    const SESSION_KEY = "chat_session";
 
-        users.forEach(u => {
-          const btn = document.createElement("button");
-          btn.className = "user-item-btn";
-          btn.innerHTML = `<span><strong>${escapeHtml(u.username)}</strong></span><span style="font-size:11px; color:var(--text-muted);">Continue &rarr;</span>`;
-          btn.onclick = () => selectUser(u);
-          existingUsersList.appendChild(btn);
-        });
-      } catch (err) {
-        existingUsersList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">Could not load users</div>';
+    // Har protected request par token lagata hai. 401 aaya (token expire/galat) toh logout.
+    async function authFetch(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 401 && currentUser) {
+        showError("Session expired. Please login again.");
+        handleLogout();
       }
+      return res;
     }
 
-    async function handleCreateUser() {
+    // path = "/auth/login" ya "/auth/register"; dono ka jawab same shape: { id, username, token }
+    async function submitAuth(path) {
       const username = usernameInput.value.trim();
-      if (!username) {
-        showError("Please enter a username");
+      const password = passwordInput.value;
+      if (!username || !password) {
+        showError("Please enter username and password");
         return;
       }
 
       try {
-        const res = await fetch("/users", {
+        const res = await fetch(path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username })
+          body: JSON.stringify({ username, password })
         });
-
-        if (res.status === 409) {
-          showError("Username already taken, please choose another.");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showError(data.error || "Request failed");
           return;
         }
-        if (!res.ok) {
-          throw new Error("Failed to create user");
-        }
-
-        const newUser = await res.json();
-        selectUser(newUser);
+        passwordInput.value = "";
+        dismissError();
+        startSession(data);
       } catch (err) {
-        showError(err.message || "Failed to create user");
+        showError("Could not reach the server");
       }
     }
 
-    function selectUser(user) {
-      currentUser = user;
-      localStorage.setItem("chat_user_id", user.id);
-      localStorage.setItem("chat_user_name", user.username);
+    function startSession({ id, username, token: newToken }) {
+      token = newToken;
+      currentUser = { id, username };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ token, id, username }));
+      } catch {}
 
       startScreen.classList.remove("active");
       chatScreen.classList.add("active");
 
-      myUsernameEl.textContent = user.username;
-      myIdEl.textContent = user.id.slice(0, 8) + "...";
+      myUsernameEl.textContent = username;
+      myIdEl.textContent = id.slice(0, 8) + "...";
 
-      // Load contacts and connect WebSocket
       loadContacts();
       connectWebSocket();
     }
 
     function handleLogout() {
-      localStorage.removeItem("chat_user_id");
-      localStorage.removeItem("chat_user_name");
+      try {
+        localStorage.removeItem(SESSION_KEY);
+      } catch {}
       clearTimeout(reconnectTimeout);
       if (ws) {
         // ws = null PEHLE: purane socket ka onclose "stale" maana jaayega, reconnect nahi lagega
@@ -652,12 +646,17 @@
         ws = null;
         old.close(1000, "user logout");
       }
+      token = null;
       currentUser = null;
       activeContact = null;
       currentConversationId = null;
+      displayedMessages.clear();
+      messagesContainer.innerHTML = '<div class="empty-state" id="empty-state">No conversation selected</div>';
+      chatTitle.textContent = "Select a contact to start chatting";
+      contactsList.innerHTML = "";
+      updateComposer();
       chatScreen.classList.remove("active");
       startScreen.classList.add("active");
-      loadExistingUsers();
     }
 
     // =========================================================
@@ -665,7 +664,7 @@
     // =========================================================
     async function loadContacts() {
       try {
-        const res = await fetch("/users");
+        const res = await authFetch("/users");
         if (!res.ok) throw new Error("Failed to fetch contacts");
         const users = await res.json();
 
@@ -691,6 +690,7 @@
           contactsList.appendChild(li);
         });
       } catch (err) {
+        if (!currentUser) return; // 401 par logout ho chuka, uska message pehle se dikh raha hai
         showError("Could not load contacts list");
       }
     }
@@ -713,7 +713,7 @@
 
       // 1. Lookup conversationId
       try {
-        const lookupRes = await fetch(`/conversations/lookup?userId=${encodeURIComponent(currentUser.id)}&with=${encodeURIComponent(contact.id)}`);
+        const lookupRes = await authFetch(`/conversations/lookup?with=${encodeURIComponent(contact.id)}`);
         if (lookupRes.ok) {
           const data = await lookupRes.json();
           currentConversationId = data.conversationId;
@@ -734,12 +734,12 @@
 
     async function loadHistory(conversationId, beforeCursor = null) {
       try {
-        let url = `/conversations/${conversationId}/messages?userId=${encodeURIComponent(currentUser.id)}&limit=30`;
+        let url = `/conversations/${conversationId}/messages?limit=30`;
         if (beforeCursor) {
           url += `&before=${encodeURIComponent(beforeCursor)}`;
         }
 
-        const res = await fetch(url);
+        const res = await authFetch(url);
         if (!res.ok) throw new Error("Failed to load message history");
         const data = await res.json();
         // Tab/contact badal chuke ho toh purana jawab ignore karo
@@ -801,6 +801,7 @@
           scrollToBottom();
         }
       } catch (err) {
+        if (!currentUser) return; // 401 par logout ho chuka
         showError("Failed to fetch messages");
       }
     }
@@ -833,9 +834,9 @@
 
       setConnectionStatus("reconnecting");
 
-      // Construct WS URL with query parameter userId
+      // Browser WebSocket mein header nahi lag sakta, isliye token query mein jaata hai
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}?userId=${encodeURIComponent(currentUser.id)}`;
+      const wsUrl = `${protocol}//${window.location.host}?token=${encodeURIComponent(token)}`;
 
       const socket = new WebSocket(wsUrl);
       ws = socket;
@@ -875,9 +876,9 @@
         console.log(`WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
         setConnectionStatus("disconnected");
 
-        // Code 1008: Policy violation (e.g., user not found or invalid userId)
+        // Code 1008: server ne token reject kiya (galat / expire / user nahi mila)
         if (event.code === 1008) {
-          showError("Session invalid (user not found on server). Please re-login.");
+          showError("Session expired or invalid. Please login again.");
           handleLogout();
           return;
         }
@@ -1118,10 +1119,13 @@
     // =========================================================
     // 8. Event Listeners & Initialization
     // =========================================================
-    btnCreateUser.addEventListener("click", handleCreateUser);
-    usernameInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") handleCreateUser();
-    });
+    btnLogin.addEventListener("click", () => submitAuth("/auth/login"));
+    btnRegister.addEventListener("click", () => submitAuth("/auth/register"));
+    [usernameInput, passwordInput].forEach((el) =>
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitAuth("/auth/login");
+      })
+    );
 
     btnSend.addEventListener("click", handleSendMessage);
     messageInput.addEventListener("keydown", (e) => {
@@ -1130,17 +1134,25 @@
 
     btnLogout.addEventListener("click", handleLogout);
 
-    // Initial App Boot
-    window.addEventListener("DOMContentLoaded", () => {
-      const savedUserId = localStorage.getItem("chat_user_id");
-      const savedUserName = localStorage.getItem("chat_user_name");
+    // Initial App Boot: saved token ho toh pehle server se verify, tab hi chat kholo
+    window.addEventListener("DOMContentLoaded", async () => {
+      let saved = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+      } catch {}
+      if (!saved || !saved.token) return;
 
-      if (savedUserId && savedUserName) {
-        // Auto-login existing dev user
-        selectUser({ id: savedUserId, username: savedUserName });
-      } else {
-        loadExistingUsers();
-      }
+      try {
+        const res = await fetch("/auth/me", { headers: { Authorization: `Bearer ${saved.token}` } });
+        if (res.ok) {
+          const me = await res.json();
+          startSession({ id: me.id, username: me.username, token: saved.token });
+          return;
+        }
+      } catch {}
+      try {
+        localStorage.removeItem(SESSION_KEY);
+      } catch {}
     });
   </script>
 </body>

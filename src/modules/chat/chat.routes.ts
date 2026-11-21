@@ -1,24 +1,21 @@
 import { Router } from "express";
 import { getHistory, lookupConversation } from "./chat.service.js";
 import { UUID_REGEX, ULID_REGEX } from "../../shared/validators.js";
+import { requireAuth } from "../auth/auth.middleware.js";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
 const router = Router();
+router.use(requireAuth);
 
 router.get("/lookup", async (req, res) => {
-  const { userId, with: otherId } = req.query;
+  const userId: string = res.locals.userId;
+  const otherId = req.query.with;
 
-  if (
-    typeof userId !== "string" ||
-    !UUID_REGEX.test(userId) ||
-    typeof otherId !== "string" ||
-    !UUID_REGEX.test(otherId)
-  ) {
-    res.status(400).json({ error: "userId and with must be valid ids" });
+  if (typeof otherId !== "string" || !UUID_REGEX.test(otherId)) {
+    res.status(400).json({ error: "with must be a valid id" });
     return;
   }
-
   const conversationId = await lookupConversation(userId, otherId);
   res.json({ conversationId });
 });
@@ -26,17 +23,13 @@ router.get("/lookup", async (req, res) => {
 
 router.get("/:id/messages", async (req, res) => {
   const conversationId = req.params.id;
-  const userId = req.query.userId;
+  const userId = res.locals.userId;
 
   if (!UUID_REGEX.test(conversationId)) {
     res.status(400).json({ error: "invalid conversation id" });
     return;
   }
 
-  if (typeof userId !== "string" || !UUID_REGEX.test(userId)) {
-    res.status(400).json({ error: "invalid userId" });
-    return;
-  }
 
   let limit = DEFAULT_LIMIT;
   if (req.query.limit !== undefined) {

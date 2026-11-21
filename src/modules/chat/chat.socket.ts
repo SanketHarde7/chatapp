@@ -1,8 +1,9 @@
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { getUserById } from "../user/user.queries.js";
+import { verifyToken } from "../auth/token.js";
 import type { Message } from "./chat.queries.js";
-import { UUID_REGEX, ULID_REGEX } from "../../shared/validators.js";
+import { ULID_REGEX } from "../../shared/validators.js";
 import {
   saveMessage,
   syncMessages,
@@ -44,16 +45,17 @@ function reportError(socket: WebSocket, err: unknown) {
   }
 }
 
-async function connect(socket: WebSocket, rawUserId: string | null) {
+async function connect(socket: WebSocket, token: string | null) {
   try {
-    if (!rawUserId || !UUID_REGEX.test(rawUserId)) {
-      socket.close(1008, "invalid userId");
+    const userId = token ? verifyToken(token) : null;
+    if (!userId) {
+      socket.close(1008, "unauthorized");
       return null;
     }
 
-    const user = await getUserById(rawUserId);
+    const user = await getUserById(userId);
     if (!user) {
-      socket.close(1008, "user not found");
+      socket.close(1008, "unauthorized");
       return null;
     }
 
@@ -175,7 +177,7 @@ export function setupWebSocket(server: Server) {
     socket.on("error", (err) => console.error("socket error:", err.message));
 
     const url = new URL(req.url ?? "", "http://localhost");
-    const ready = connect(socket, url.searchParams.get("userId"));
+    const ready = connect(socket, url.searchParams.get("token"));
 
     let chain: Promise<void> = Promise.resolve();
 

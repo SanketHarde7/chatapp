@@ -31,3 +31,5 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_messages_undelivered
   ON messages (id) WHERE delivered_at IS NULL;
+
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;

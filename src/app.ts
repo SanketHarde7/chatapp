@@ -1,5 +1,6 @@
 import express from "express";
 import userRoutes from "./modules/user/user.routes.js";
+import authRoutes from "./modules/auth/auth.routes.js";
 import chatRoutes from "./modules/chat/chat.routes.js";
 import type { NextFunction, Request, Response } from "express";
 import path from "node:path";
@@ -11,6 +12,7 @@ app.get("/health",(req,res)=>{
 });
 app.use ("/users",userRoutes);
 app.use("/conversations", chatRoutes);
+app.use("/auth", authRoutes);
 app.use((req, res) => {
     res.status(404).json({ error: "not found" });
   });
