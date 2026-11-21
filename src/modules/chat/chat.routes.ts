@@ -1,9 +1,6 @@
 import { Router } from "express";
 import { getHistory } from "./chat.service.js";
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ULID_REGEX = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+import { UUID_REGEX, ULID_REGEX } from "../../shared/validators.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -43,14 +40,20 @@ router.get("/:id/messages", async (req, res) => {
     before = raw.toUpperCase();
   }
 
-  const messages = await getHistory(userId.toLowerCase(), conversationId.toLowerCase(), limit, before);
+  const result = await getHistory(
+    userId.toLowerCase(),
+    conversationId.toLowerCase(),
+    limit,
+    before
+  );
 
-  if (messages === null) {
+  if (result === null) {
     res.status(403).json({ error: "not allowed" });
     return;
   }
 
-  const nextCursor = messages.length === limit ? messages[messages.length - 1].id : null;
+  const { messages, hasMore } = result;
+  const nextCursor = hasMore ? messages[messages.length - 1].id : null;
   res.json({ messages, nextCursor });
 });
 

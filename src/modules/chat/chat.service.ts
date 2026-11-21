@@ -30,14 +30,12 @@ export async function getHistory(
   conversationId: string,
   limit: number,
   before: string | null
-): Promise<Message[] | null> {
+): Promise<{ messages: Message[]; hasMore: boolean } | null> {
   const isMember = await isConversationMember(conversationId, userId);
   if (!isMember) return null;
-  return getMessages(conversationId, limit, before);
-}
 
-export function confirmDelivered(messageId: string, userId: string) {
-  return markDelivered(messageId, userId);
+  const rows = await getMessages(conversationId, limit + 1, before);
+  return { messages: rows.slice(0, limit), hasMore: rows.length > limit };
 }
 
 export async function syncMessages(
@@ -50,4 +48,7 @@ export async function syncMessages(
     : await getPendingMessages(userId, limit + 1);
 
   return { messages: rows.slice(0, limit), hasMore: rows.length > limit };
+}
+export function confirmDelivered(messageId: string, userId: string) {
+  return markDelivered(messageId, userId);
 }

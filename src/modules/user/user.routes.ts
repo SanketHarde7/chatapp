@@ -1,9 +1,6 @@
 import { Router } from "express";
 import { createUser, getUserById } from "./user.queries.js";
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
+import { UUID_REGEX } from "../../shared/validators.js";
 const router = Router();
 
 router.post("/", async (req, res) => {

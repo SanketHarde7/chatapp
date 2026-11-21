@@ -2,6 +2,7 @@ import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { getUserById } from "../user/user.queries.js";
 import type { Message } from "./chat.queries.js";
+import { UUID_REGEX, ULID_REGEX } from "../../shared/validators.js";
 import {
   saveMessage,
   syncMessages,
@@ -9,9 +10,7 @@ import {
   ChatError,
 } from "./chat.service.js";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ULID_REGEX = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
 
 const clients = new Map<string, WebSocket>();
 
