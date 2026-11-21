@@ -31,6 +31,7 @@ function toDelivery(m: Message) {
     conversationId: m.conversation_id,
     from: m.sender_id,
     text: m.body,
+    createdAt: m.created_at,
   };
 }
 

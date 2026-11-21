@@ -1,7 +1,7 @@
 import { monotonicFactory } from "ulid";
 import { getUserById } from "../user/user.queries.js";
 import { findOrCreateConversation, insertMessage,isConversationMember,getMessages, getPendingMessages , markDelivered ,getMessagesAfter, type Message } from "./chat.queries.js";
-
+import {selectConversation} from "./chat.queries.js";
 const ulid = monotonicFactory();
 
 export class ChatError extends Error {}
@@ -51,4 +51,17 @@ export async function syncMessages(
 }
 export function confirmDelivered(messageId: string, userId: string) {
   return markDelivered(messageId, userId);
+}
+
+export async function lookupConversation(
+  userId: string,
+  otherId: string
+): Promise<string | null> {
+  const a = userId.toLowerCase();
+  const b = otherId.toLowerCase();
+  if (a === b) return null;
+
+  const [userA, userB] = a < b ? [a, b] : [b, a];
+  const conversation = await selectConversation(userA, userB);
+  return conversation ? conversation.id : null;
 }

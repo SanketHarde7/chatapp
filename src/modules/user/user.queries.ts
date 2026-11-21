@@ -19,3 +19,10 @@ export async function getUserById(id : string):Promise <User | null>
     ( " SELECT id ,username ,created_at FROM users WHERE id =$1 ",[id]);
     return result.rows [0] ?? null ;
 }
+
+export async function listUsers(): Promise<Pick<User, "id" | "username">[]> {
+    const result = await pool.query<Pick<User, "id" | "username">>(
+        "SELECT id, username FROM users ORDER BY username"
+    );
+    return result.rows;
+}

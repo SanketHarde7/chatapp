@@ -1,7 +1,12 @@
 import { Router } from "express";
-import { createUser, getUserById } from "./user.queries.js";
+import { createUser, getUserById, listUsers } from "./user.queries.js";
 import { UUID_REGEX } from "../../shared/validators.js";
 const router = Router();
+
+router.get("/", async (req, res) => {
+  const users = await listUsers();
+  res.json(users);
+});
 
 router.post("/", async (req, res) => {
   const username = req.body?.username;

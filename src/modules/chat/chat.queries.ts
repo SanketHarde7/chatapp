@@ -13,9 +13,10 @@ export type Message = {
   sender_id: string;
   body: string;
   created_at: Date;
+  delivered_at?: Date | null;
 };
 
-async function selectConversation(userA: string, userB: string): Promise<Conversation | null> {
+export async function selectConversation(userA: string, userB: string): Promise<Conversation | null> {
   const result = await pool.query<Conversation>(
     "SELECT id, user_a, user_b, created_at FROM conversations WHERE user_a = $1 AND user_b = $2",
     [userA, userB]
@@ -83,7 +84,7 @@ export async function getMessages(
   params.push(limit);
 
   const result = await pool.query<Message>(
-    `SELECT id, conversation_id, sender_id, body, created_at
+    `SELECT id, conversation_id, sender_id, body, created_at, delivered_at
      FROM messages
      WHERE conversation_id = $1 ${cursorClause}
      ORDER BY id DESC

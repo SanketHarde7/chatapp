@@ -2,8 +2,10 @@ import express from "express";
 import userRoutes from "./modules/user/user.routes.js";
 import chatRoutes from "./modules/chat/chat.routes.js";
 import type { NextFunction, Request, Response } from "express";
+import path from "node:path";
 const app =express();
 app.use(express.json());
+app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 app.get("/health",(req,res)=>{
     res.json({status : "ok"});
 });

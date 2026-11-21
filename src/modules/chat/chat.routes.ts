@@ -1,11 +1,28 @@
 import { Router } from "express";
-import { getHistory } from "./chat.service.js";
+import { getHistory, lookupConversation } from "./chat.service.js";
 import { UUID_REGEX, ULID_REGEX } from "../../shared/validators.js";
-
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
 const router = Router();
+
+router.get("/lookup", async (req, res) => {
+  const { userId, with: otherId } = req.query;
+
+  if (
+    typeof userId !== "string" ||
+    !UUID_REGEX.test(userId) ||
+    typeof otherId !== "string" ||
+    !UUID_REGEX.test(otherId)
+  ) {
+    res.status(400).json({ error: "userId and with must be valid ids" });
+    return;
+  }
+
+  const conversationId = await lookupConversation(userId, otherId);
+  res.json({ conversationId });
+});
+
 
 router.get("/:id/messages", async (req, res) => {
   const conversationId = req.params.id;
