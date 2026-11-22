@@ -2,7 +2,7 @@ import app from "./app.js";
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { setupWebSocket } from "./modules/chat/chat.socket.js";
-
+import { closeRedis } from "./shared/redis.js";
 const server = app.listen(env.port, () => {
   console.log(`Server running on http://localhost:${env.port}`);
 });
@@ -31,6 +31,8 @@ async function shutdown(signal: string) {
     await new Promise<void>((resolve, reject) => {
       server.close((err) => (err ? reject(err) : resolve()));
     });
+
+    await closeRedis(); 
 
     await pool.end();
 

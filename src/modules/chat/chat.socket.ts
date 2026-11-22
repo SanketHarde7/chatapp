@@ -4,6 +4,7 @@ import { getUserById } from "../user/user.queries.js";
 import { verifyToken } from "../auth/token.js";
 import type { Message } from "./chat.queries.js";
 import { ULID_REGEX } from "../../shared/validators.js";
+import { publishToUser, subscribeUser, unsubscribeUser } from "../../shared/redis.js";
 import {
   saveMessage,
   syncMessages,
@@ -35,6 +36,16 @@ function toDelivery(m: Message) {
     createdAt: m.created_at,
   };
 }
+// Kisi user tak event pahunchana: Redis par uski frequency par bolo.
+// Message Postgres mein pehle se safe hai, isliye Redis fail ho toh sirf log karo;
+// receiver ko reconnect par sync se mil jayega.
+async function forward(userId: string, payload: object) {
+  try {
+    await publishToUser(userId, payload);
+  } catch (err) {
+    console.error("redis publish failed:", err);
+  }
+}
 
 function reportError(socket: WebSocket, err: unknown) {
   if (err instanceof ChatError) {
@@ -61,6 +72,17 @@ async function connect(socket: WebSocket, token: string | null) {
 
     if (socket.readyState !== WebSocket.OPEN) return null;
 
+    // Pehle Redis par tune karo, phir hi "online" maano. Sync iske BAAD chalta hai,
+    // isliye beech mein koi message nahi chhootega.
+    await subscribeUser(user.id, (payload) => sendJson(clients.get(user.id), payload));
+
+    if (socket.readyState !== WebSocket.OPEN) {
+      // Socket subscribe ke dauran band ho gaya. Agar isi user ka doosra socket chal raha hai
+      // toh uski subscription mat todo.
+      if (!clients.has(user.id)) await unsubscribeUser(user.id).catch(() => {});
+      return null;
+    }
+
     clients.set(user.id, socket);
     console.log(`${user.username} connected (online: ${clients.size})`);
 
@@ -81,7 +103,7 @@ async function handleDelivered(socket: WebSocket, userId: string, id: unknown) {
   const messageId = id.toUpperCase();
   const senderId = await confirmDelivered(messageId, userId);
   if (senderId) {
-    sendJson(clients.get(senderId), { type: "delivered", id: messageId });
+    await forward(senderId, { type: "delivered", id: messageId });
   }
 }
 
@@ -132,7 +154,7 @@ async function handleChat(
     conversationId: saved.conversation_id,
   });
 
-  sendJson(clients.get(to.toLowerCase()), toDelivery(saved));
+  await forward(to.toLowerCase(), toDelivery(saved));
 }
 
 async function handleMessage(socket: WebSocket, userId: string, raw: string) {
@@ -198,6 +220,7 @@ export function setupWebSocket(server: Server) {
       const user = await ready;
       if (user && clients.get(user.id) === socket) {
         clients.delete(user.id);
+        await unsubscribeUser(user.id).catch((err) => console.error("redis unsubscribe failed:", err));
         console.log(`${user.username} disconnected (online: ${clients.size})`);
       }
     });

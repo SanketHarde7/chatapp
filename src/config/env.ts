@@ -18,6 +18,7 @@ function requiredSecret(name: string): string {
 export const env = {
     port: Number(required("PORT")),
     jwtSecret: requiredSecret("JWT_SECRET"),
+    redisUrl: required("REDIS_URL"),
     db: {
         host: required("DB_HOST"),
         port: Number(required("DB_PORT")),
